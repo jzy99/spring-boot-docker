@@ -1,3 +1,4 @@
+---
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -180,3 +181,4 @@ spec:
     - name: basic-auth
       secret:
         secretName: "{{ git_auth_secret }}"
+---
