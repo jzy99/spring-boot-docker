@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -113,7 +112,7 @@ spec:
       - name: buildah
         params:
           - name: IMAGE
-            value: 'hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag)'
+            value: 'hub-k8s.xsyxsc.cn/bb-dev/spring-boot-docker:$(params.image_tag)'
           - name: TLSVERIFY
             value: 'false'
           - name: STORAGE_DRIVER
@@ -137,16 +136,16 @@ spec:
               echo "----------"
               DEPLOYMENT_NAME="spring-boot-docker-develop"
               APP_NAME="spring-boot-docker"
-              NAMESPACE="cc-dev"
+              NAMESPACE="bb-dev"
               
               if kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE >/dev/null 2>&1; 
               then
                 echo "Deployment $DEPLOYMENT_NAME exists in namespace $NAMESPACE"
-                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
+                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/bb-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
               else
                 echo "Deployment $DEPLOYMENT_NAME does not exist in namespace $NAMESPACE"
                 kubectl apply -f kubernetes/deploy-dev-develop.yaml -n $NAMESPACE
-                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
+                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/bb-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
               fi              
               echo "----------"
         runAfter:
@@ -181,4 +180,3 @@ spec:
     - name: basic-auth
       secret:
         secretName: "{{ git_auth_secret }}"
----
