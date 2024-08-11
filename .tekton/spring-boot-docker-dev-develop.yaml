@@ -100,7 +100,7 @@ spec:
       - name: deploy
         params:
           - name: script
-            value: >
+            value: >-
               echo "----------"
 
               DEPLOYMENT_NAME="spring-boot-docker-develop"
@@ -118,7 +118,7 @@ spec:
                 kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
               else
                 echo "Deployment $DEPLOYMENT_NAME does not exist in namespace $NAMESPACE"
-                kubectl apply -f kubernetes/deploy-dev-develop.yaml -n $NAMESPACE
+                kubectl apply -f kubernetes/develop.yaml -n $NAMESPACE
                 kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
               fi              
 
