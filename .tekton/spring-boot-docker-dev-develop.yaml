@@ -1,0 +1,183 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: "spring-boot-docker-dev-develop"
+  annotations:
+    # The event we are targeting as seen from the webhook payload
+    # this can be an array too, i.e: [pull_request, push]
+    pipelinesascode.tekton.dev/on-event: "[push]"
+
+    # The branch or tag we are targeting (ie: main, refs/tags/*)
+    pipelinesascode.tekton.dev/on-target-branch: "[develop]"
+
+    # Fetch the git-clone task from hub, we are able to reference later on it
+    # with taskRef and it will automatically be embedded into our pipeline.
+    #pipelinesascode.tekton.dev/task: "fetch-repository"
+
+    # Use maven task from the hub to test our Java project
+    #pipelinesascode.tekton.dev/task-1: "buildah"
+
+    # You can add more tasks by increasing the suffix number, you can specify
+    # them as array to have multiple of them.
+    # browse the tasks you want to include from hub on https://hub.tekton.dev/
+    #
+    #pipelinesascode.tekton.dev/task-2: "deploy"
+
+    # How many runs we want to keep attached to this event
+    pipelinesascode.tekton.dev/max-keep-runs: "1"
+spec:
+  params:
+    # The variable with brackets are special to Pipelines as Code
+    # They will automatically be expanded with the events from Github.
+    - name: repo_url
+      value: "{{ repo_url }}"
+    - name: revision
+      value: "{{ revision }}"
+    - name: namespace
+      value: "{{target_namespace}}"
+    - name: image_tag
+      value: "{{image_tag}}"
+  pipelineSpec:
+    description: |
+      该流水线提供了典型的 CI/CD 流程，流程包括：
+        - 获取 git 存储库作为源
+        - 使用buildah通过Dockerfile构建Docker镜像
+        - 将构建的 Docker 镜像推送到所需的存储库
+        - 将其部署到 Kubernetes 集群
+    params:
+      - name: repo_url
+      - name: revision
+    workspaces:
+      - name: workspace
+      - name: basic-auth
+      - name: maven-repo
+      - name: dockerconfig-ws
+    tasks:
+      - name: fetch-repository
+        taskRef:
+          name: git-clone
+          kind: ClusterTask
+        workspaces:
+          - name: output
+            workspace: workspace
+          - name: basic-auth
+            workspace: basic-auth
+        params:
+          - name: url
+            value: $(params.repo_url)
+          - name: revision
+            value: $(params.revision)
+      - name: maven
+        params:
+          - name: MAVEN_IMAGE
+            value: harbor-k8s.xsyxsc.cn/cloud-builders/mvn
+          - name: GOALS
+            value:
+              - 'dependency:go-offline'
+              - '-DskipTests'
+              - 'clean'
+              - 'package'
+          - name: MAVEN_MIRROR_URL
+            value: 'https://maven.aliyun.com/nexus/content/groups/public'
+          - name: SERVER_USER
+            value: ''
+          - name: SERVER_PASSWORD
+            value: ''
+          - name: PROXY_USER
+            value: ''
+          - name: PROXY_PASSWORD
+            value: ''
+          - name: PROXY_PORT
+            value: ''
+          - name: PROXY_HOST
+            value: ''
+          - name: PROXY_NON_PROXY_HOSTS
+            value: ''
+          - name: PROXY_PROTOCOL
+            value: http
+          - name: CONTEXT_DIR
+            value: .
+        runAfter:
+          - fetch-repository
+        taskRef:
+          kind: ClusterTask
+          name: maven
+        workspaces:
+          - name: source
+            workspace: workspace
+          - name: maven-settings
+            workspace: maven-repo
+          - name: maven-local-repo
+            workspace: maven-repo
+      - name: buildah
+        params:
+          - name: IMAGE
+            value: 'hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag)'
+          - name: TLSVERIFY
+            value: 'false'
+          - name: STORAGE_DRIVER
+            value: vfs
+          - name: DOCKERFILE
+            value: docker/Dockerfile
+        runAfter:
+          - maven
+        taskRef:
+          kind: ClusterTask
+          name: buildah
+        workspaces:
+          - name: source
+            workspace: workspace
+          - name: dockerconfig
+            workspace: dockerconfig-ws
+      - name: deploy
+        params:
+          - name: script
+            value: |
+              echo "----------"
+              DEPLOYMENT_NAME="spring-boot-docker-develop"
+              APP_NAME="spring-boot-docker"
+              NAMESPACE="cc-dev"
+              
+              if kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE >/dev/null 2>&1; 
+              then
+                echo "Deployment $DEPLOYMENT_NAME exists in namespace $NAMESPACE"
+                kubectl create -f kubernetes/deploy-dev-develop.yaml -n $NAMESPACE
+                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
+              else
+                echo "Deployment $DEPLOYMENT_NAME does not exist in namespace $NAMESPACE"
+                kubectl create -f kubernetes/deploy-dev-develop.yaml -n $NAMESPACE
+                kubectl set image deployment/$DEPLOYMENT_NAME $APP_NAME=hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker:$(params.image_tag) -n $NAMESPACE
+              fi              
+              echo "----------"
+        runAfter:
+          - buildah
+        taskRef:
+          kind: ClusterTask
+          name: kubernetes-actions
+        workspaces:
+          - name: kubeconfig-dir
+            workspace: workspace
+          - name: manifest-dir
+            workspace: workspace
+        status:
+          reason: Skipped
+  workspaces:
+    - name: workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+    - name: maven-repo
+      persistentVolumeClaim:
+        claimName: maven-repo
+    - name: dockerconfig-ws
+      secret:
+        secretName: registry
+    # This workspace will inject secret to help the git-clone task to be able to
+    # checkout the private repositories
+    - name: basic-auth
+      secret:
+        secretName: "{{ git_auth_secret }}"
