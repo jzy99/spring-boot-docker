@@ -1,0 +1,43 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: spring-boot-docker-ls-test
+spec:
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: "spring-boot-docker-ls-test"
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: spring-boot-docker-ls-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-boot-docker-ls-test
+  template:
+    metadata:
+      labels:
+        app: spring-boot-docker-ls-test
+    spec:
+      containers:
+        - name: spring-boot-docker
+          image: hub-k8s.xsyxsc.cn/cc-dev/spring-boot-docker
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              memory: "180Mi"
+              cpu: "10m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+---
