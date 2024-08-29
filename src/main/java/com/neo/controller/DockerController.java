@@ -8,6 +8,6 @@ public class DockerController {
 	
     @RequestMapping("/")
     public String index() {
-        return "Hello Docker!-dev20240828-20281";
+        return "Hello Docker!-dev20240828-202811";
     }
 }
